@@ -1,0 +1,21 @@
+{
+  "rtx4060": {
+    "name": "GeForce RTX 4060",
+    "prices": [
+      {"shop": "Amazon", "price": 59800},
+      {"shop": "楽天", "price": 61200},
+      {"shop": "Yahoo", "price": 58900}
+    ],
+    "aiComment": "フルHDゲーム向けとして価格と性能のバランスが良いGPUです。"
+  },
+
+  "7800x3d": {
+    "name": "Ryzen 7 7800X3D",
+    "prices": [
+      {"shop": "Amazon", "price": 54800},
+      {"shop": "楽天", "price": 55980},
+      {"shop": "Yahoo", "price": 54500}
+    ],
+    "aiComment": "ゲーム用途では非常に人気が高く、ハイエンドゲーミングPCでよく選ばれるCPUです。"
+  }
+}
