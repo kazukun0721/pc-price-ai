@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
@@ -34,3 +35,20 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+=======
+# pc-price-ai
+# PC価格AI
+
+PCパーツの最安値を検索できるサイト。
+
+機能
+- 商品検索
+- ショップ価格比較
+- 最安値表示
+- AIおすすめコメント
+
+対象カテゴリ
+- GPU
+- CPU
+- SSD
+>>>>>>> 1ab89fde4579a88e97480204e5806c833e5a050c

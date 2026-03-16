@@ -3,7 +3,37 @@
 import { useState } from "react"
 
 const products: any = {
-  "rtx 4060": {
+ "rtx 4071 super": {
+name:"RTX 4071 Super",
+prices:[
+{shop:"Amazon",price:95800,url:"https://www.amazon.co.jp"},
+{shop:"楽天",price:97200,url:"https://www.rakuten.co.jp"},
+{shop:"Yahoo",price:94980,url:"https://shopping.yahoo.co.jp"}
+],
+ai:"WQHDゲームにも余裕があり、コスパの良い高性能GPU。"
+},
+
+"rtx 4080": {
+name:"RTX 4080",
+prices:[
+{shop:"Amazon",price:158000,url:"https://www.amazon.co.jp"},
+{shop:"楽天",price:161200,url:"https://www.rakuten.co.jp"},
+{shop:"Yahoo",price:156800,url:"https://shopping.yahoo.co.jp"}
+],
+ai:"4Kゲームも狙えるハイエンドGPU。"
+},
+
+"rx 7700xt": {
+name:"RX 7700 XT",
+prices:[
+{shop:"Amazon",price:62800,url:"https://www.amazon.co.jp"},
+{shop:"楽天",price:64200,url:"https://www.rakuten.co.jp"},
+{shop:"Yahoo",price:61800,url:"https://shopping.yahoo.co.jp"}
+],
+ai:"WQHDゲーミングに向いた高コスパGPU。"
+},
+
+ "rtx 4060": {
     name: "RTX 4060",
     prices: [
       { shop: "Amazon", price: 59800, url: "https://www.amazon.co.jp" },
