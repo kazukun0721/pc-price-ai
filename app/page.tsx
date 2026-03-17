@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 
 type RakutenItem = {
@@ -30,9 +30,9 @@ export default function Home() {
   const [items, setItems] = useState<RakutenItem[]>([])
   const [loading, setLoading] = useState(false)
 
-  const searchRakuten = async (forced?: string) => {
-    const keyword = forced ?? query
-    if (!keyword.trim()) return
+  const searchRakuten = async (forcedKeyword?: string) => {
+    const keyword = (forcedKeyword ?? query).trim()
+    if (!keyword) return
 
     setQuery(keyword)
     setLoading(true)
@@ -40,9 +40,24 @@ export default function Home() {
     try {
       const res = await fetch(`/api/rakuten?keyword=${encodeURIComponent(keyword)}`)
       const data = await res.json()
-      setItems(data.Items || [])
-    } catch (e) {
-      console.error(e)
+
+      const fetchedItems: RakutenItem[] = data.Items || []
+      setItems(fetchedItems)
+
+      for (const item of fetchedItems) {
+        await fetch("/api/save-price", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: item.itemName,
+            price: item.itemPrice,
+          }),
+        })
+      }
+    } catch (error) {
+      console.error("検索エラー:", error)
       setItems([])
     } finally {
       setLoading(false)
@@ -53,45 +68,74 @@ export default function Home() {
     searchRakuten("rtx 4060")
   }, [])
 
-  const createStorePrices = (price: number, url: string): StorePrice[] => {
-    const amazon = Math.round(price * 0.98)
-    const yahoo = Math.round(price * 1.01)
+  const createStorePrices = (rakutenPrice: number, rakutenUrl: string): StorePrice[] => {
+    const amazonPrice = Math.round(rakutenPrice * 0.98)
+    const yahooPrice = Math.round(rakutenPrice * 1.01)
 
     return [
-      { store: "Amazon", price: amazon, url: "https://www.amazon.co.jp" },
-      { store: "楽天", price: price, url: url },
-      { store: "Yahoo", price: yahoo, url: "https://shopping.yahoo.co.jp" },
+      {
+        store: "Amazon",
+        price: amazonPrice,
+        url: `https://www.amazon.co.jp/s?k=${encodeURIComponent(query)}`
+      },
+      {
+        store: "楽天",
+        price: rakutenPrice,
+        url: rakutenUrl,
+      },
+      {
+        store: "Yahoo",
+        price: yahooPrice,
+        url: `https://shopping.yahoo.co.jp/search?p=${encodeURIComponent(query)}`
+      },
     ].sort((a, b) => a.price - b.price)
   }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white">
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <div className="flex gap-3 mb-8 flex-wrap">
-          <Link href="/ranking" className="bg-purple-600 px-4 py-2 rounded-xl font-bold">
-            人気
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="flex gap-4 mb-6 flex-wrap">
+          <Link
+            href="/ranking"
+            className="bg-purple-600 px-4 py-2 rounded-xl font-bold hover:bg-purple-500"
+          >
+            人気ランキング
           </Link>
-          <Link href="/deals" className="bg-red-600 px-4 py-2 rounded-xl font-bold">
+
+          <Link
+            href="/deals"
+            className="bg-red-600 px-4 py-2 rounded-xl font-bold hover:bg-red-500"
+          >
             値下がり
           </Link>
-          <Link href="/build" className="bg-green-600 px-4 py-2 rounded-xl font-bold">
-            構成
+
+          <Link
+            href="/build"
+            className="bg-green-600 px-4 py-2 rounded-xl font-bold hover:bg-green-500"
+          >
+            おすすめ構成
           </Link>
-          <Link href="/predict" className="bg-cyan-600 px-4 py-2 rounded-xl font-bold">
-            価格AI
+
+          <Link
+            href="/predict"
+            className="bg-cyan-600 px-4 py-2 rounded-xl font-bold hover:bg-cyan-500"
+          >
+            価格予測AI
           </Link>
         </div>
 
         <h1 className="text-5xl font-bold mb-2">PCパーツ価格AI</h1>
-        <p className="text-slate-400 mb-8">最安比較・価格履歴・買い時判定</p>
+        <p className="text-slate-400 mb-8">最安比較・買い時判定・AI解説</p>
 
         <div className="flex gap-3 mb-4">
           <input
+            className="flex-1 rounded-xl bg-slate-900 px-4 py-3 border border-slate-700 outline-none focus:border-blue-500"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && searchRakuten()}
-            className="flex-1 bg-slate-900 border border-slate-700 px-4 py-3 rounded-xl outline-none focus:border-blue-500"
-            placeholder="例: rtx 4060 / 7800x3d / ssd 2tb"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") searchRakuten()
+            }}
+            placeholder="例: rtx 4060 / 7800x3d / rx 7700 xt / ssd 2tb"
           />
 
           <button
@@ -102,14 +146,14 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="flex gap-2 flex-wrap mb-10">
-          {SUGGESTED_KEYWORDS.map((k) => (
+        <div className="flex gap-2 mb-8 flex-wrap">
+          {SUGGESTED_KEYWORDS.map((keyword) => (
             <button
-              key={k}
-              onClick={() => searchRakuten(k)}
-              className="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl text-sm"
+              key={keyword}
+              onClick={() => searchRakuten(keyword)}
+              className="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl text-sm font-bold"
             >
-              {k}
+              {keyword}
             </button>
           ))}
         </div>
@@ -120,11 +164,18 @@ export default function Home() {
           </div>
         )}
 
+        {!loading && items.length === 0 && (
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
+            商品が見つかりませんでした。
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-6">
           {items.map((item, i) => (
             <ProductCard
               key={i}
               item={item}
+              query={query}
               storePrices={createStorePrices(item.itemPrice, item.itemUrl)}
             />
           ))}
@@ -136,12 +187,114 @@ export default function Home() {
 
 function ProductCard({
   item,
+  query,
   storePrices,
 }: {
   item: RakutenItem
+  query: string
   storePrices: StorePrice[]
 }) {
-  const cheapest = storePrices[0]
+  const [showAiComment, setShowAiComment] = useState(false)
+  const [aiComment, setAiComment] = useState("")
+  const [loadingAi, setLoadingAi] = useState(false)
+
+  const cheapestStore = storePrices[0]
+
+  const averagePrice = useMemo(() => {
+    const total = storePrices.reduce((sum, s) => sum + s.price, 0)
+    return Math.round(total / storePrices.length)
+  }, [storePrices])
+
+  const currentPrice = cheapestStore.price
+
+  const diffFromAverage = currentPrice - averagePrice
+  const diffRate = averagePrice > 0 ? (diffFromAverage / averagePrice) * 100 : 0
+
+  const buyLevel =
+    currentPrice <= Math.round(averagePrice * 0.95)
+      ? "excellent"
+      : currentPrice <= Math.round(averagePrice * 0.98)
+      ? "good"
+      : currentPrice >= Math.round(averagePrice * 1.05)
+      ? "high"
+      : "normal"
+
+  const buyLabel =
+    buyLevel === "excellent"
+      ? "🔥 今が買い時"
+      : buyLevel === "good"
+      ? "✅ やや安め"
+      : buyLevel === "high"
+      ? "⚠ やや高め"
+      : "➖ 通常価格"
+
+  const buyLabelStyle =
+    buyLevel === "excellent"
+      ? "bg-red-500 text-white"
+      : buyLevel === "good"
+      ? "bg-emerald-500 text-black"
+      : buyLevel === "high"
+      ? "bg-yellow-500 text-black"
+      : "bg-slate-600 text-white"
+
+  const handleStoreClick = async (storeName: string) => {
+    try {
+      await fetch("/api/click", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: item.itemName,
+          store: storeName,
+        }),
+      })
+    } catch (error) {
+      console.error("クリック記録エラー:", error)
+    }
+  }
+
+  const handleAiCommentClick = async () => {
+    if (showAiComment) {
+      setShowAiComment(false)
+      return
+    }
+
+    setShowAiComment(true)
+
+    if (aiComment) return
+
+    setLoadingAi(true)
+
+    try {
+      const res = await fetch("/api/ai-comment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query,
+          itemName: item.itemName,
+          currentPrice,
+          averagePrice,
+          cheapestStore: cheapestStore.store,
+          cheapestPrice: cheapestStore.price,
+          reachedTarget: false,
+          targetPrice: null,
+          buyLevel,
+          diffRate,
+        }),
+      })
+
+      const data = await res.json()
+      setAiComment(data.comment || "AIコメントの生成に失敗しました。")
+    } catch (error) {
+      console.error("AIコメント生成エラー:", error)
+      setAiComment("AIコメントの生成に失敗しました。")
+    } finally {
+      setLoadingAi(false)
+    }
+  }
 
   const buttonStyle = (store: string) => {
     if (store === "Amazon") return "bg-amber-400 text-black hover:bg-amber-300"
@@ -163,15 +316,19 @@ function ProductCard({
 
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="text-emerald-400 text-2xl font-bold">
-              {cheapest.price.toLocaleString()}円
+              {cheapestStore.price.toLocaleString()}円
             </div>
 
             <span className="bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold">
-              最安: {cheapest.store}
+              最安: {cheapestStore.store}
+            </span>
+
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${buyLabelStyle}`}>
+              {buyLabel}
             </span>
           </div>
 
-          <div className="grid gap-2 mb-5">
+          <div className="grid gap-2 mb-4">
             {storePrices.map((s) => (
               <div
                 key={s.store}
@@ -183,19 +340,41 @@ function ProductCard({
             ))}
           </div>
 
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap mb-4">
             {storePrices.map((s) => (
               <a
                 key={s.store}
                 href={s.url}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => handleStoreClick(s.store)}
                 className={`px-4 py-2 rounded-xl font-bold transition ${buttonStyle(s.store)}`}
               >
                 {s.store}で見る
               </a>
             ))}
           </div>
+
+          <button
+            onClick={handleAiCommentClick}
+            className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl font-bold"
+          >
+            {showAiComment ? "AIコメントを閉じる" : "AIコメントを見る"}
+          </button>
+
+          {showAiComment && (
+            <div className="mt-4 bg-slate-950 border border-slate-800 rounded-2xl p-4">
+              <p className="text-blue-400 font-bold mb-2">AIコメント</p>
+
+              {loadingAi ? (
+                <p className="text-slate-300">AIが分析中...</p>
+              ) : (
+                <div className="text-sm text-slate-200 leading-7 whitespace-pre-line">
+                  {aiComment}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
