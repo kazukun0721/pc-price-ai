@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "PCパーツの価格比較と最安値を表示するサイト",
 
   verification: {
-    google: "opy5yDYMwSMjNJYxHCfGUYf4ZClBCcO5kUQdtzj2yNM" />",
+    google: "opy5yDYMwSMjNJYxHCfGUYf4ZClBCcO5kUQdtzj2yNM",
   },
 };
 
