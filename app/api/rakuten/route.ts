@@ -7,7 +7,11 @@ export async function GET(req: NextRequest) {
 
   if (!appId || !accessKey) {
     return NextResponse.json(
-      { error: "楽天APIキーが設定されていません" },
+      {
+        error: "楽天APIキーが設定されていません",
+        hasAppId: !!appId,
+        hasAccessKey: !!accessKey,
+      },
       { status: 500 }
     )
   }
@@ -32,10 +36,12 @@ export async function GET(req: NextRequest) {
 
   const url = `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601?${params.toString()}`
 
+  const origin = req.nextUrl.origin
+
   const res = await fetch(url, {
     headers: {
-      Origin: "https://pc-price-ai.vercel.app",
-      Referer: "https://pc-price-ai.vercel.app/",
+      Origin: origin,
+      Referer: `${origin}/`,
       "User-Agent": "Mozilla/5.0",
     },
     cache: "no-store",
@@ -44,7 +50,15 @@ export async function GET(req: NextRequest) {
   const data = await res.json()
 
   if (!res.ok) {
-    return NextResponse.json(data, { status: res.status })
+    return NextResponse.json(
+      {
+        error: "楽天APIエラー",
+        status: res.status,
+        details: data,
+        origin,
+      },
+      { status: res.status }
+    )
   }
 
   const commonNgWords = [
@@ -86,7 +100,11 @@ export async function GET(req: NextRequest) {
       "rtx",
       "radeon",
     ]
-  } else if (lowerKeyword.includes("7800x3d") || lowerKeyword.includes("7600") || lowerKeyword.includes("i5")) {
+  } else if (
+    lowerKeyword.includes("7800x3d") ||
+    lowerKeyword.includes("7600") ||
+    lowerKeyword.includes("i5")
+  ) {
     extraNgWords = [
       "ゲーミングpc",
       "デスクトップ",
