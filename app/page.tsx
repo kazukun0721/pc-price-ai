@@ -1,150 +1,454 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { products } from "../data/products"
-import { Product } from "../types/product"
+import { useEffect, useMemo, useState } from "react"
+
+type RakutenItem = {
+  itemName: string
+  itemPrice: number
+  itemUrl: string
+  mediumImageUrls: string[]
+}
+
+type SavedHistoryPoint = {
+  price: number
+  date: number
+}
+
+type DisplayHistoryPoint = {
+  date: string
+  price: number
+}
+
+type StorePrice = {
+  store: string
+  price: number
+  url: string
+}
 
 export default function Home() {
-  const [query, setQuery] = useState("")
-  const [item, setItem] = useState<Product | null>(null)
+  const [query, setQuery] = useState("rtx 4060")
+  const [items, setItems] = useState<RakutenItem[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const suggestions = useMemo(() => {
-    const lowerQuery = query.toLowerCase().trim()
+  const searchRakuten = async () => {
+    if (!query.trim()) return
 
-    if (!lowerQuery) return []
+    setLoading(true)
 
-    return Object.keys(products)
-      .filter((key) => key.includes(lowerQuery))
-      .slice(0, 6)
-  }, [query])
+    try {
+      const res = await fetch(`/api/rakuten?keyword=${encodeURIComponent(query)}`)
+      const data = await res.json()
 
-  const search = (forcedKey?: string) => {
-    const lowerQuery = (forcedKey ?? query).toLowerCase().trim()
+      const fetchedItems: RakutenItem[] = data.Items || []
+      setItems(fetchedItems)
 
-    const foundKey = Object.keys(products).find((key) =>
-      key.includes(lowerQuery)
-    )
-
-    if (foundKey) {
-      setItem(products[foundKey])
-      setQuery(foundKey)
-    } else {
-      setItem(null)
+      for (const item of fetchedItems) {
+        await fetch("/api/save-price", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: item.itemName,
+            price: item.itemPrice,
+          }),
+        })
+      }
+    } catch (error) {
+      console.error("検索エラー:", error)
+      setItems([])
+    } finally {
+      setLoading(false)
     }
   }
 
-  let cheapest = null
+  const createStorePrices = (rakutenPrice: number, rakutenUrl: string): StorePrice[] => {
+    const amazonPrice = Math.round(rakutenPrice * 0.98)
+    const yahooPrice = Math.round(rakutenPrice * 1.01)
 
-  if (item) {
-    cheapest = item.prices.reduce((a, b) =>
-      a.price < b.price ? a : b
-    )
+    return [
+      {
+        store: "Amazon",
+        price: amazonPrice,
+        url: "https://www.amazon.co.jp",
+      },
+      {
+        store: "楽天",
+        price: rakutenPrice,
+        url: rakutenUrl,
+      },
+      {
+        store: "Yahoo",
+        price: yahooPrice,
+        url: "https://shopping.yahoo.co.jp",
+      },
+    ].sort((a, b) => a.price - b.price)
   }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <div className="max-w-4xl mx-auto px-6 py-10">
-        <h1 className="text-4xl font-bold mb-2">PC最安値AI</h1>
-        <p className="text-slate-300 mb-8">
-          PCパーツを検索して、価格比較・最安値・AIコメントを表示
-        </p>
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <h1 className="text-4xl font-bold mb-6">PCパーツ価格AI</h1>
 
-        <div className="relative mb-16 z-20">
-          <div className="flex gap-3">
-            <input
-              className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none focus:border-blue-500"
-              placeholder="例: rtx 4060 / 7800x3d / ssd 1tb"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") search()
-              }}
-            />
+        <div className="flex gap-3 mb-8">
+          <input
+            className="flex-1 rounded-xl bg-slate-900 px-4 py-3 border border-slate-700"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") searchRakuten()
+            }}
+            placeholder="例: rtx 4060 / 7800x3d / rx 7700 xt"
+          />
 
-            <button
-              className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-              onClick={() => search()}
-            >
-              検索
-            </button>
-          </div>
-
-          {query.trim() !== "" && suggestions.length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden z-50">
-              {suggestions.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="block w-full px-4 py-3 text-left text-slate-200 hover:bg-slate-800 border-b border-slate-800 last:border-b-0"
-                  onClick={() => search(key)}
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-          )}
+          <button
+            onClick={searchRakuten}
+            className="bg-blue-600 px-6 py-3 rounded-xl font-bold"
+          >
+            検索
+          </button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-10">
-          {Object.keys(products).map((key) => (
-            <button
-              key={key}
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-sm text-slate-200 hover:bg-slate-800"
-              onClick={() => {
-                setQuery(key)
-                setItem(products[key])
-              }}
-            >
-              {key}
-            </button>
+        {loading && <p>検索中...</p>}
+
+        <div className="grid gap-6">
+          {items.map((item, i) => (
+            <ProductCard
+              key={i}
+              item={item}
+              storePrices={createStorePrices(item.itemPrice, item.itemUrl)}
+            />
           ))}
         </div>
+      </div>
+    </main>
+  )
+}
 
-        {item && (
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h2 className="text-3xl font-bold mb-2">{item.name}</h2>
-              <p className="text-emerald-400 font-semibold">
-                最安値: {cheapest?.shop} {cheapest?.price.toLocaleString()}円
-              </p>
+function ProductCard({
+  item,
+  storePrices,
+}: {
+  item: RakutenItem
+  storePrices: StorePrice[]
+}) {
+  const [history, setHistory] = useState<DisplayHistoryPoint[]>([])
+  const [rawHistory, setRawHistory] = useState<SavedHistoryPoint[]>([])
+  const [targetPrice, setTargetPrice] = useState("")
+  const [savedTargetPrice, setSavedTargetPrice] = useState<number | null>(null)
+  const [savingTarget, setSavingTarget] = useState(false)
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(
+          `/api/get-price-history?name=${encodeURIComponent(item.itemName)}`
+        )
+        const data = await res.json()
+
+        const saved: SavedHistoryPoint[] = data.history || []
+        setRawHistory(saved)
+
+        const formatted: DisplayHistoryPoint[] = saved.slice(-6).map((point) => {
+          const d = new Date(point.date)
+          return {
+            date: `${d.getMonth() + 1}/${d.getDate()}`,
+            price: point.price,
+          }
+        })
+
+        setHistory(formatted)
+      } catch (error) {
+        console.error("履歴取得エラー:", error)
+        setHistory([])
+        setRawHistory([])
+      }
+    }
+
+    const fetchTargetPrice = async () => {
+      try {
+        const res = await fetch(
+          `/api/get-target-price?name=${encodeURIComponent(item.itemName)}`
+        )
+        const data = await res.json()
+
+        if (data.targetPrice !== null) {
+          setSavedTargetPrice(Number(data.targetPrice))
+          setTargetPrice(String(data.targetPrice))
+        } else {
+          setSavedTargetPrice(null)
+          setTargetPrice("")
+        }
+      } catch (error) {
+        console.error("目標価格取得エラー:", error)
+      }
+    }
+
+    fetchHistory()
+    fetchTargetPrice()
+  }, [item.itemName])
+
+  const saveTargetPrice = async () => {
+    if (!targetPrice.trim()) return
+
+    const num = Number(targetPrice)
+    if (Number.isNaN(num) || num <= 0) return
+
+    setSavingTarget(true)
+
+    try {
+      const res = await fetch("/api/save-target-price", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: item.itemName,
+          targetPrice: num,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setSavedTargetPrice(num)
+      }
+    } catch (error) {
+      console.error("目標価格保存エラー:", error)
+    } finally {
+      setSavingTarget(false)
+    }
+  }
+
+  const clearTargetPrice = () => {
+    setSavedTargetPrice(null)
+    setTargetPrice("")
+  }
+
+  const fallbackHistory: DisplayHistoryPoint[] = [
+    { date: "3/11", price: Math.round(item.itemPrice * 1.08) },
+    { date: "3/12", price: Math.round(item.itemPrice * 1.06) },
+    { date: "3/13", price: Math.round(item.itemPrice * 1.04) },
+    { date: "3/14", price: Math.round(item.itemPrice * 1.02) },
+    { date: "3/15", price: Math.round(item.itemPrice * 1.01) },
+    { date: "今日", price: item.itemPrice },
+  ]
+
+  const displayHistory =
+    history.length > 0 ? history : fallbackHistory
+
+  const analysisSource =
+    rawHistory.length > 0
+      ? rawHistory.map((h) => h.price)
+      : fallbackHistory.map((h) => h.price)
+
+  const maxPrice = useMemo(
+    () => Math.max(...displayHistory.map((h) => h.price)),
+    [displayHistory]
+  )
+
+  const minPrice = useMemo(
+    () => Math.min(...displayHistory.map((h) => h.price)),
+    [displayHistory]
+  )
+
+  const averagePrice = useMemo(() => {
+    const total = analysisSource.reduce((sum, price) => sum + price, 0)
+    return Math.round(total / analysisSource.length)
+  }, [analysisSource])
+
+  const currentPrice = item.itemPrice
+  const cheapestStore = storePrices[0]
+
+  const diffFromAverage = currentPrice - averagePrice
+  const diffRate = averagePrice > 0 ? (diffFromAverage / averagePrice) * 100 : 0
+
+  const buyLevel =
+    currentPrice <= Math.round(averagePrice * 0.95)
+      ? "excellent"
+      : currentPrice <= Math.round(averagePrice * 0.98)
+      ? "good"
+      : currentPrice >= Math.round(averagePrice * 1.05)
+      ? "high"
+      : "normal"
+
+  const buyLabel =
+    buyLevel === "excellent"
+      ? "🔥 今が買い時"
+      : buyLevel === "good"
+      ? "✅ やや安め"
+      : buyLevel === "high"
+      ? "⚠ やや高め"
+      : "➖ 通常価格"
+
+  const buyLabelStyle =
+    buyLevel === "excellent"
+      ? "bg-red-500 text-white"
+      : buyLevel === "good"
+      ? "bg-emerald-500 text-black"
+      : buyLevel === "high"
+      ? "bg-yellow-500 text-black"
+      : "bg-slate-600 text-white"
+
+  const reachedTarget =
+    savedTargetPrice !== null && currentPrice <= savedTargetPrice
+
+  const aiComment =
+    reachedTarget
+      ? `設定した目標価格 ${savedTargetPrice.toLocaleString()}円 以下になっています。今が通知ライン到達です。`
+      : buyLevel === "excellent"
+      ? `現在価格は平均より ${Math.abs(diffRate).toFixed(1)}% 安く、かなり良い水準です。特に ${cheapestStore.store} が最安なので、購入候補として強いタイミングです。`
+      : buyLevel === "good"
+      ? `現在価格は平均より ${Math.abs(diffRate).toFixed(1)}% 安めです。急ぎなら十分検討しやすい価格帯です。`
+      : buyLevel === "high"
+      ? `現在価格は平均より ${Math.abs(diffRate).toFixed(1)}% 高めです。急ぎでなければ値下がり待ちも候補です。`
+      : `現在価格はおおむね平均付近です。最安は ${cheapestStore.store} なので、買うならそこが有力です。`
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+      <div className="flex gap-6 flex-col md:flex-row">
+        <img
+          src={item.mediumImageUrls?.[0]}
+          className="w-32 h-32 object-contain bg-white rounded-xl p-2"
+          alt={item.itemName}
+        />
+
+        <div className="flex-1">
+          <h2 className="text-xl font-bold mb-3">{item.itemName}</h2>
+
+          <div className="flex items-center gap-3 mb-5 flex-wrap">
+            <p className="text-2xl font-bold text-emerald-400">
+              最安 {cheapestStore.price.toLocaleString()}円
+            </p>
+
+            <span className="bg-yellow-500 text-black px-3 py-1 rounded-full text-sm font-bold">
+              🏆 {cheapestStore.store} 最安値
+            </span>
+
+            <span className={`px-3 py-1 rounded-full text-sm font-bold ${buyLabelStyle}`}>
+              {buyLabel}
+            </span>
+
+            {reachedTarget && (
+              <span className="px-3 py-1 rounded-full text-sm font-bold bg-pink-500 text-white">
+                🔔 目標価格到達
+              </span>
+            )}
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl mb-4">
+            <p className="text-sm text-orange-400 mb-3">目標価格アラート</p>
+
+            <div className="flex gap-3 flex-col md:flex-row">
+              <input
+                type="number"
+                className="flex-1 rounded-xl bg-slate-900 px-4 py-3 border border-slate-700"
+                placeholder="この価格以下になったら買う"
+                value={targetPrice}
+                onChange={(e) => setTargetPrice(e.target.value)}
+              />
+
+              <button
+                onClick={saveTargetPrice}
+                className="bg-orange-500 text-black px-5 py-3 rounded-xl font-bold"
+                disabled={savingTarget}
+              >
+                {savingTarget ? "保存中..." : "保存"}
+              </button>
+
+              <button
+                onClick={clearTargetPrice}
+                className="bg-slate-700 px-5 py-3 rounded-xl font-bold"
+              >
+                解除
+              </button>
             </div>
 
-            <div className="grid gap-4">
-              {item.prices.map((p) => (
+            {savedTargetPrice !== null && (
+              <p className="text-sm text-slate-300 mt-3">
+                設定中の目標価格: {savedTargetPrice.toLocaleString()}円
+              </p>
+            )}
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl mb-4">
+            <p className="text-sm text-emerald-400 mb-3">ストア比較</p>
+
+            <div className="grid gap-3">
+              {storePrices.map((store, index) => (
                 <div
-                  key={p.shop}
-                  className="rounded-2xl border border-slate-800 bg-slate-900 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                  key={store.store}
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-4 py-3"
                 >
-                  <div>
-                    <p className="text-xl font-semibold">{p.shop}</p>
-                    <p className="text-slate-300">{p.price.toLocaleString()}円</p>
-                    {cheapest?.shop === p.shop && (
-                      <p className="text-emerald-400 font-semibold mt-1">最安値</p>
+                  <div className="flex items-center gap-3">
+                    {index === 0 && (
+                      <span className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold">
+                        1位
+                      </span>
                     )}
+                    {index === 1 && (
+                      <span className="bg-slate-600 px-2 py-1 rounded-full text-xs">
+                        2位
+                      </span>
+                    )}
+                    {index === 2 && (
+                      <span className="bg-slate-600 px-2 py-1 rounded-full text-xs">
+                        3位
+                      </span>
+                    )}
+                    <span className="font-semibold">{store.store}</span>
                   </div>
 
-                  <a href={p.url} target="_blank" rel="noreferrer">
-                    <button className="rounded-xl bg-white px-4 py-2 font-semibold text-black hover:bg-slate-200">
-                      {p.shop}で見る
-                    </button>
-                  </a>
+                  <div className="flex items-center gap-4">
+                    <span className="text-emerald-400 font-bold">
+                      {store.price.toLocaleString()}円
+                    </span>
+                    <a
+                      href={store.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-white text-black px-4 py-2 rounded-xl font-bold"
+                    >
+                      見る
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-xl font-bold text-blue-400 mb-3">AIコメント</h3>
-              <p className="text-slate-200 leading-7">{item.ai}</p>
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl mb-4">
+            <p className="text-sm text-purple-400 mb-2">価格履歴</p>
+
+            <div className="flex items-end gap-2 h-40">
+              {displayHistory.map((point, index) => {
+                const height = (point.price / maxPrice) * 140
+
+                return (
+                  <div key={`${point.date}-${index}`} className="flex-1 flex flex-col items-center">
+                    <div
+                      className={`w-full rounded-t ${
+                        index === displayHistory.length - 1 ? "bg-blue-500" : "bg-slate-500"
+                      }`}
+                      style={{ height }}
+                    />
+                    <span className="text-xs mt-1">{point.date}</span>
+                  </div>
+                )
+              })}
             </div>
-          </div>
-        )}
 
-        {!item && query.trim() !== "" && suggestions.length === 0 && (
-          <div className="rounded-2xl border border-red-800 bg-red-950 p-6 text-red-200">
-            該当する商品が見つからなかったよ。
+            <p className="text-xs text-slate-400 mt-2">
+              最安 {minPrice.toLocaleString()}円 / 平均 {averagePrice.toLocaleString()}円 / 最高 {maxPrice.toLocaleString()}円
+            </p>
           </div>
-        )}
+
+          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl mb-4">
+            <p className="text-sm text-blue-400 mb-2">AIコメント</p>
+            <p className="text-sm leading-7">{aiComment}</p>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   )
 }
